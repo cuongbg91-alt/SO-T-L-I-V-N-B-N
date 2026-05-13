@@ -85,7 +85,9 @@ export default function ErrorPanel({ errors, isAnalyzing, onSelectError, onFixEr
                     {error.type.toUpperCase()}
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-mono">Dòng {error.line || '?'}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {error.page && `Trang ${error.page} • `}Dòng {error.line || '?'}
+                    </span>
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();

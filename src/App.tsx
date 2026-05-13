@@ -43,6 +43,7 @@ Hãy trả về kết quả dưới dạng JSON là một mảng các đối tư
 - originalText: Đoạn văn bản gốc bị lỗi (cần chính xác để bôi đỏ).
 - severity: 'low' | 'medium' | 'high'.
 - line: Số dòng ước tính.
+- page: Số trang ước tính trong file gốc.
 `;
 
 export default function App() {
@@ -137,7 +138,8 @@ export default function App() {
                 suggestion: { type: Type.STRING },
                 originalText: { type: Type.STRING },
                 severity: { type: Type.STRING },
-                line: { type: Type.NUMBER }
+                line: { type: Type.NUMBER },
+                page: { type: Type.NUMBER }
               },
               required: ["id", "type", "message", "suggestion", "originalText", "severity"]
             }
