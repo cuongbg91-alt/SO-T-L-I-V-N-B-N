@@ -60,20 +60,14 @@ export default function EditorView({ content, errors, selectedErrorId }: EditorV
 
   return (
     <div 
-      className="bg-white mx-auto shadow-2xl min-h-full p-[2cm] overflow-x-auto word-document-container"
-      style={{ 
-        width: '210mm',
-        minHeight: '297mm',
-        boxSizing: 'border-box'
-      }}
+      className="word-document-viewer"
     >
       <div 
         ref={containerRef}
-        className="prose prose-slate max-w-none prose-p:my-0"
+        className="max-w-none"
         style={{
           fontFamily: '"Times New Roman", Times, serif',
           fontSize: '14pt',
-          lineHeight: '1.5',
           color: '#000'
         }}
       />

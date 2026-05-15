@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import mammoth from 'mammoth';
+import { saveAs } from 'file-saver';
+import HTMLtoDOCX from 'html-to-docx';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { RuleConfig, ProofreadingError, DocumentState } from './types';
@@ -27,20 +29,23 @@ Bạn là chuyên gia AL (Artificial Intelligence) cấp cao nhất về soát l
 Hệ thống của bạn đã được tích hợp kiến thức "Tự học" (Self-learning) và cập nhật liên tục các văn bản pháp luật mới nhất cho đến năm 2025-2026, bao gồm:
 - Toàn bộ Nghị định 30/2020/NĐ-CP về công tác văn thư.
 - Hướng dẫn 36-HD/VPTW về thể thức văn bản Đảng.
-- Luật Tổ chức chính quyền địa phương 2015 (và các văn bản sửa đổi, bổ sung cập nhật mới nhất).
+- Luật Tổ chức chính quyền địa phương và các văn bản sửa đổi, bổ sung cập nhật mới nhất (bao gồm cả cập nhật năm 2025).
 - Các Quy chế làm việc tiêu chuẩn của các cơ quan Nhà nước và Đảng bộ.
 
 Nhiệm vụ của bạn là nhận diện chính xác các lỗi:
 1. Thể thức kỹ thuật: Theo đúng chuẩn NĐ 30 hoặc HD 36 (tùy cấu hình). Kiểm tra chi tiết đến từng dấu chấm, dấu phẩy, khoảng cách dòng, thụt lề, kiểu chữ của từng thành phần văn bản.
-2. Thể thức nội dung: Kiểm tra tính logic của các đề mục, căn cứ pháp lý (ví dụ: nếu văn bản nhắc đến Luật cũ đã hết hiệu lực, hãy đề xuất cập nhật Luật mới nhất).
+2. Thể thức nội dung & Logic: Kiểm tra tính logic của các đề mục, căn cứ pháp lý. Nếu văn bản nhắc đến quy định đã hết hiệu lực, hãy đề xuất cập nhật quy định mới nhất (ví dụ: Luật Tổ chức chính quyền địa phương 2025).
 3. Chính tả & Ngữ pháp: Soát lỗi kỹ thuật gõ máy và lỗi dùng từ chuyên môn hành chính.
+4. TÍNH THỐNG NHẤT (Consistency): 
+   - Kiểm tra sự đồng nhất của các đề mục: Hệ thống ký hiệu (I, II, 1, 2, a, b, ...) phải thống nhất xuyên suốt văn bản.
+   - Kiểm tra các ký tự đầu dòng: Nếu dùng "-", "+" hoặc "*" cho các mục cùng cấp thì phải thống nhất toàn văn bản. Tuyệt đối không để xảy ra tình trạng chỗ dùng "1.", chỗ dùng "1/" cho cùng một cấp độ mục.
 
 Hãy trả về kết quả dưới dạng JSON là một mảng các đối tượng lỗi:
 - id: chuỗi duy nhất.
-- type: 'format' (thể thức) | 'spelling' (chính tả) | 'grammar' (ngữ pháp) | 'logic' (nội dung/pháp lý).
-- message: Mô tả lỗi chi tiết, trích dẫn rõ điều khoản quy định (ví dụ: "Vi phạm Điều 8 NĐ 30/2020", "Căn cứ Luật Tổ chức chính quyền địa phương 2015...").
-- suggestion: Giải pháp sửa đổi tối ưu nhất.
-- originalText: Đoạn văn bản gốc bị lỗi (cần chính xác để bôi đỏ).
+- type: 'format' (thể thức) | 'spelling' (chính tả) | 'grammar' (ngữ pháp) | 'logic' (nội dung/pháp lý/thống nhất).
+- message: Mô tả lỗi chi tiết, trích dẫn rõ điều khoản quy định hoặc chỉ rõ sự không thống nhất trong trình bày.
+- suggestion: Giải pháp sửa đổi tối ưu nhất để đảm bảo văn bản chuẩn mực và chuyên nghiệp.
+- originalText: Đoạn văn bản gốc bị lỗi (cần chính xác để tìm kiếm và bôi đỏ).
 - severity: 'low' | 'medium' | 'high'.
 - line: Số dòng ước tính.
 - page: Số trang ước tính trong file gốc.
@@ -51,6 +56,7 @@ export default function App() {
   const [docState, setDocState] = useState<DocumentState | null>(null);
   const [errors, setErrors] = useState<ProofreadingError[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [selectedErrorId, setSelectedErrorId] = useState<string | null>(null);
   
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -63,7 +69,19 @@ export default function App() {
     reader.onload = async (e) => {
       const arrayBuffer = e.target?.result as ArrayBuffer;
       try {
-        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const options = {
+          styleMap: [
+            "p[style-name='Section Title'] => h1:fresh",
+            "p[style-name='Subsection Title'] => h2:fresh",
+            "p[style-name='Normal'] => p:fresh",
+            "p[style-name='Heading 1'] => h1:fresh",
+            "p[style-name='Heading 2'] => h2:fresh",
+            "p[style-name='Heading 3'] => h3:fresh",
+            "p[style-name='Title'] => h1:fresh",
+            "p[style-name='Subtitle'] => h2:fresh"
+          ]
+        };
+        const result = await mammoth.convertToHtml({ arrayBuffer }, options);
         const textResult = await mammoth.extractRawText({ arrayBuffer });
         
         setDocState({
@@ -79,6 +97,91 @@ export default function App() {
       }
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  const handleDownload = async () => {
+    if (!docState || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      // Create a clean version for download
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = docState.htmlContent;
+      
+      // 1. Remove all error highlighting spans but keep text
+      const errorSpans = tempDiv.querySelectorAll('span[data-error-id]');
+      errorSpans.forEach(span => {
+        const textNode = document.createTextNode(span.textContent || "");
+        span.parentNode?.replaceChild(textNode, span);
+      });
+
+      // 2. Remove any anchor tags used for linking
+      const anchors = tempDiv.querySelectorAll('span[id^="error-"]');
+      anchors.forEach(a => {
+        const textNode = document.createTextNode(a.textContent || "");
+        a.parentNode?.replaceChild(textNode, a);
+      });
+
+      const fullHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>${docState.fileName}</title>
+            <style>
+              @page {
+                margin: 2.5cm 2cm 2.5cm 3cm;
+              }
+              body { 
+                font-family: 'Times New Roman', Times, serif; 
+                font-size: 14pt; 
+                line-height: 1.5;
+                color: black;
+              }
+              p { 
+                text-align: justify; 
+                margin: 0; 
+                padding: 0;
+                min-height: 1em;
+              }
+              table { 
+                border-collapse: collapse; 
+                width: 100%; 
+                margin: 12pt 0;
+              }
+              td, th { 
+                border: 1px solid black; 
+                padding: 5pt; 
+                vertical-align: top;
+              }
+              strong, b { font-weight: bold; }
+              em, i { font-style: italic; }
+            </style>
+          </head>
+          <body>
+            ${tempDiv.innerHTML}
+          </body>
+        </html>
+      `;
+
+      const docxBlob = await HTMLtoDOCX(fullHtml, null, {
+        margins: {
+          top: 1417, // 25mm in twentieths of a point
+          right: 1134, // 20mm
+          bottom: 1417, // 25mm
+          left: 1701 // 30mm
+        },
+        font: 'Times New Roman',
+        fontSize: 28, // 14pt in half-points
+        orientation: 'portrait'
+      });
+
+      saveAs(docxBlob, `VB_Chuan_${docState.fileName.replace('.docx', '')}.docx`);
+    } catch (err) {
+      console.error("Download failed:", err);
+      alert("Lỗi khi chuẩn bị tệp tải về. Vui lòng thử lại.");
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handlePaste = async () => {
@@ -118,7 +221,10 @@ export default function App() {
         ${textToAnalyze.substring(0, 10000)}
         --- END ---
         
-        YÊU CẦU: Áp dụng các kiến thức mới nhất về Luật Tổ chức chính quyền địa phương và quy định hành chính hiện hành để đánh giá.
+        YÊU CẦU CHI TIẾT:
+        1. Áp dụng các kiến thức mới nhất về Luật Tổ chức chính quyền địa phương (Cập nhật 2025) và quy định hành chính hiện hành.
+        2. KIỂM TRA TÍNH THỐNG NHẤT: Rà soát toàn bộ văn bản để tìm các mẫu (patterns) trình bày đề mục, danh sách không đồng nhất. Ví dụ: Nếu mục 1 là "1.", mục 2 không được là "2/".
+        3. HIỆU CHỈNH TỐI ƯU: Đề xuất phương án sửa lỗi tối ưu nhất dựa trên các cơ sở pháp lý hiện hành.
       `;
 
       const response = await ai.models.generateContent({
@@ -207,10 +313,11 @@ export default function App() {
         config={config} 
         setConfig={setConfig}
         onUpload={handleFileUpload}
-        onDownload={() => alert('Chức năng tải về đang được phát triển')}
+        onDownload={handleDownload}
         onPaste={handlePaste}
         onClear={handleClear}
         hasFile={!!docState}
+        isDownloading={isDownloading}
       />
       
       <main className="flex flex-1 overflow-hidden p-4 gap-4">

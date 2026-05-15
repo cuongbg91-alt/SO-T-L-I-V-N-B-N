@@ -18,6 +18,7 @@ interface ToolbarProps {
   onPaste: () => void;
   onClear: () => void;
   hasFile: boolean;
+  isDownloading?: boolean;
 }
 
 export default function Toolbar({ 
@@ -27,7 +28,8 @@ export default function Toolbar({
   onDownload, 
   onPaste, 
   onClear,
-  hasFile
+  hasFile,
+  isDownloading
 }: ToolbarProps) {
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-10">
@@ -105,11 +107,15 @@ export default function Toolbar({
 
         <button 
           onClick={onDownload}
-          disabled={!hasFile}
+          disabled={!hasFile || isDownloading}
           className="flex items-center gap-2 border border-slate-300 hover:border-slate-400 disabled:opacity-50 text-slate-700 px-4 py-2 rounded-lg font-medium transition-all"
         >
-          <FileDown className="w-5 h-5" />
-          <span>Tải về</span>
+          {isDownloading ? (
+            <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+          ) : (
+            <FileDown className="w-5 h-5" />
+          )}
+          <span>{isDownloading ? "Đang xử lý..." : "Tải về"}</span>
         </button>
       </div>
     </header>

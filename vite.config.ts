@@ -13,6 +13,10 @@ export default defineConfig(({mode}) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        'stream': 'stream-browserify',
+        'buffer': 'buffer',
+        'process': 'process/browser',
+        'events': 'events',
       },
     },
     server: {

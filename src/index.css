@@ -5,18 +5,51 @@
   --font-serif: "Times New Roman", Times, serif;
 }
 
-.word-document-container table {
+/* Word Document Styles according to ND 30 */
+.word-document-viewer {
+  background-color: white;
+  margin: 0 auto;
+  box-shadow: 0 0 50px rgba(0,0,0,0.1);
+  min-height: 297mm;
+  width: 210mm;
+  box-sizing: border-box;
+  /* ND 30 Standard Margins */
+  padding-top: 25mm;
+  padding-bottom: 25mm;
+  padding-left: 30mm;
+  padding-right: 20mm;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.word-document-viewer table {
   border-collapse: collapse;
   width: 100%;
   margin: 1em 0;
 }
 
-.word-document-container table td, 
-.word-document-container table th {
+.word-document-viewer table td, 
+.word-document-viewer table th {
   border: 1px solid #000;
   padding: 4px 8px;
+  font-family: inherit;
 }
 
-.word-document-container p {
-  margin-bottom: 0.5em;
+.word-document-viewer p {
+  margin: 0;
+  padding: 0;
+  min-height: 1em;
+  /* ND 30 Standard Line Spacing */
+  line-height: 1.5;
+  text-align: justify;
 }
+
+.word-document-viewer .p-left { text-align: left; }
+.word-document-viewer .p-right { text-align: right; }
+.word-document-viewer .p-center { text-align: center; }
+.word-document-viewer .p-justify { text-align: justify; }
+
+/* Handle Mammoth's default styling or custom tags */
+.word-document-viewer b, .word-document-viewer strong { font-weight: bold; }
+.word-document-viewer i, .word-document-viewer em { font-style: italic; }
+.word-document-viewer u { text-decoration: underline; }
