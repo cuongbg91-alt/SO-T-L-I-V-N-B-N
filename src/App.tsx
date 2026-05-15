@@ -111,29 +111,61 @@ export default function App() {
     if (!docState || isDownloading) return;
     setIsDownloading(true);
     try {
-      // Create a clean version for download
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = docState.htmlContent;
-      
-      // 1. Remove all error highlighting spans added by EditorView (in case they were somehow in the string)
-      const errorSpans = tempDiv.querySelectorAll('span[data-error-id]');
-      errorSpans.forEach(span => {
-        const textNode = document.createTextNode(span.textContent || "");
-        span.parentNode?.replaceChild(textNode, span);
+      const escapeRegex = (string: string) => {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      };
+
+      // 1. Process red highlights for CURRENT errors
+      let htmlForDoc = docState.htmlContent;
+      const sortedErrors = [...errors].sort((a, b) => b.originalText.length - a.originalText.length);
+
+      sortedErrors.forEach(err => {
+        const originalText = err.originalText;
+        const inlineStyle = "color: #b91c1c; background-color: #fee2e2; border-bottom: 1pt solid #dc2626; text-decoration: underline;";
+        const replacement = `<span style="${inlineStyle}">${originalText}</span>`;
+        
+        const escapedOriginalText = originalText
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+        // Helper for safe replacement in HTML
+        const safeReplace = (content: string, target: string, repl: string) => {
+          const regex = new RegExp(escapeRegex(target), 'g');
+          return content.replace(regex, (match, offset) => {
+            const before = content.substring(0, offset);
+            const openTags = before.split('<').length - 1;
+            const closeTags = before.split('>').length - 1;
+            if (openTags > closeTags) return match; // Inside a tag
+            return repl;
+          });
+        };
+
+        if (htmlForDoc.includes(originalText)) {
+          htmlForDoc = safeReplace(htmlForDoc, originalText, replacement);
+        } else if (htmlForDoc.includes(escapedOriginalText)) {
+          htmlForDoc = safeReplace(htmlForDoc, escapedOriginalText, `<span style="${inlineStyle}">${escapedOriginalText}</span>`);
+        }
       });
 
-      // 2. Remove all "fixed" highlight spans but keep the corrected text
+      // 2. Process green highlights for FIXED errors and clean-up
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlForDoc;
+      
       const fixedSpans = tempDiv.querySelectorAll('span.text-green-600');
       fixedSpans.forEach(span => {
-        const textNode = document.createTextNode(span.textContent || "");
-        span.parentNode?.replaceChild(textNode, span);
+        (span as HTMLElement).style.color = '#15803d';
+        (span as HTMLElement).style.backgroundColor = '#f0fdf4';
+        (span as HTMLElement).style.fontWeight = 'bold';
+        (span as HTMLElement).style.padding = '1pt 2pt';
+        (span as HTMLElement).style.borderRadius = '2pt';
       });
 
-      // 3. Remove any other utility spans
-      const anchors = tempDiv.querySelectorAll('span[id^="error-"]');
-      anchors.forEach(a => {
-        const textNode = document.createTextNode(a.textContent || "");
-        a.parentNode?.replaceChild(textNode, a);
+      const allSpans = tempDiv.querySelectorAll('span');
+      allSpans.forEach(span => {
+        span.removeAttribute('id');
+        span.removeAttribute('data-error-id');
+        span.removeAttribute('class');
       });
 
       const fullHtml = `
@@ -181,21 +213,23 @@ export default function App() {
 
       const docxBlob = await HTMLtoDOCX(fullHtml, null, {
         margins: {
-          top: 1417, // 25mm in twentieths of a point
-          right: 1134, // 20mm
-          bottom: 1417, // 25mm
-          left: 1701 // 30mm
+          top: 1417, 
+          right: 1134, 
+          bottom: 1417, 
+          left: 1701 
         },
         font: 'Times New Roman',
-        fontSize: 28, // 14pt in half-points
+        fontSize: 28, 
         orientation: 'portrait'
       });
 
-      const fileName = docState.fileName.toLowerCase().endsWith('.docx') 
-        ? docState.fileName 
-        : `${docState.fileName}.docx`;
+      const isDocx = docState.fileName.toLowerCase().endsWith('.docx');
+      const isDoc = docState.fileName.toLowerCase().endsWith('.doc');
+      let extension = '.docx';
+      if (isDoc) extension = '.doc';
       
-      saveAs(docxBlob, `VB_Chuan_${fileName}`);
+      const baseName = docState.fileName.replace(/\.(docx|doc|txt)$/i, '');
+      saveAs(docxBlob, `VB_Chuan_${baseName}${extension}`);
     } catch (err) {
       console.error("Download failed:", err);
       alert("Lỗi khi chuẩn bị tệp tải về. Vui lòng thử lại.");
@@ -293,15 +327,28 @@ export default function App() {
     }
   };
 
+  const safeReplace = (content: string, target: string, repl: string) => {
+    const escapeRegex = (string: string) => {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+    const regex = new RegExp(escapeRegex(target), 'g');
+    return content.replace(regex, (match, offset) => {
+      const before = content.substring(0, offset);
+      const openTags = before.split('<').length - 1;
+      const closeTags = before.split('>').length - 1;
+      if (openTags > closeTags) return match; // Inside a tag
+      return repl;
+    });
+  };
+
   const handleFixError = (errorId: string) => {
     if (!docState) return;
     const error = errors.find(e => e.id === errorId);
     if (!error) return;
 
-    // Use a more targeted replacement: replace ONLY the first occurrence or all occurrences of the exact string
-    // Here we use split/join which replaces ALL occurrences. In a professional editor, you'd want offset-based indexing.
-    // However, given the current simple string state, we'll stick to this but ensure we don't break existing tags if possible.
-    const newHtml = docState.htmlContent.split(error.originalText).join(`<span class="text-green-600 font-bold bg-green-50 px-1 rounded">${error.suggestion}</span>`);
+    const replacement = `<span class="text-green-600 font-bold bg-green-50 px-1 rounded">${error.suggestion}</span>`;
+    const newHtml = safeReplace(docState.htmlContent, error.originalText, replacement);
+    
     setDocState({ ...docState, htmlContent: newHtml });
     setErrors(prev => prev.filter(e => e.id !== errorId));
   };
@@ -309,9 +356,14 @@ export default function App() {
   const handleFixAll = () => {
     if (!docState) return;
     let newHtml = docState.htmlContent;
-    errors.forEach(err => {
-      newHtml = newHtml.split(err.originalText).join(`<span class="text-green-600 font-bold bg-green-50 px-1 rounded">${err.suggestion}</span>`);
+    // Sort errors by length descending to help prevent nested replacement issues
+    const sorted = [...errors].sort((a, b) => b.originalText.length - a.originalText.length);
+    
+    sorted.forEach(err => {
+      const replacement = `<span class="text-green-600 font-bold bg-green-50 px-1 rounded">${err.suggestion}</span>`;
+      newHtml = safeReplace(newHtml, err.originalText, replacement);
     });
+    
     setDocState({ ...docState, htmlContent: newHtml });
     setErrors([]);
   };
