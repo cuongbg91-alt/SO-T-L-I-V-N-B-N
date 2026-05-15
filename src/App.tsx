@@ -29,12 +29,12 @@ Bạn là chuyên gia AL (Artificial Intelligence) cấp cao nhất về soát l
 Hệ thống của bạn đã được tích hợp kiến thức "Tự học" (Self-learning) và cập nhật liên tục các văn bản pháp luật mới nhất cho đến năm 2025-2026, bao gồm:
 - Toàn bộ Nghị định 30/2020/NĐ-CP về công tác văn thư.
 - Hướng dẫn 36-HD/VPTW về thể thức văn bản Đảng.
-- Luật Tổ chức chính quyền địa phương và các văn bản sửa đổi, bổ sung cập nhật mới nhất (bao gồm cả cập nhật năm 2025).
+- Luật Tổ chức chính quyền địa phương và các văn bản sửa đổi, bổ sung cập nhật mới nhất (bao gồm cả cập nhật năm 2026).
 - Các Quy chế làm việc tiêu chuẩn của các cơ quan Nhà nước và Đảng bộ.
 
 Nhiệm vụ của bạn là nhận diện chính xác các lỗi:
 1. Thể thức kỹ thuật: Theo đúng chuẩn NĐ 30 hoặc HD 36 (tùy cấu hình). Kiểm tra chi tiết đến từng dấu chấm, dấu phẩy, khoảng cách dòng, thụt lề, kiểu chữ của từng thành phần văn bản.
-2. Thể thức nội dung & Logic: Kiểm tra tính logic của các đề mục, căn cứ pháp lý. Nếu văn bản nhắc đến quy định đã hết hiệu lực, hãy đề xuất cập nhật quy định mới nhất (ví dụ: Luật Tổ chức chính quyền địa phương 2025).
+2. Thể thức nội dung & Logic: Kiểm tra tính logic của các đề mục, căn cứ pháp lý. Nếu văn bản nhắc đến quy định đã hết hiệu lực, hãy đề xuất cập nhật quy định mới nhất (ví dụ: Luật Tổ chức chính quyền địa phương 2026).
 3. Chính tả & Ngữ pháp: Soát lỗi kỹ thuật gõ máy và lỗi dùng từ chuyên môn hành chính.
 4. TÍNH THỐNG NHẤT (Consistency): 
    - Kiểm tra sự đồng nhất của các đề mục: Hệ thống ký hiệu (I, II, 1, 2, a, b, ...) phải thống nhất xuyên suốt văn bản.
@@ -59,7 +59,15 @@ export default function App() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [selectedErrorId, setSelectedErrorId] = useState<string | null>(null);
   
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const getAI = () => {
+    // @ts-ignore
+    const apiKey = (typeof __GEMINI_API_KEY__ !== 'undefined' ? __GEMINI_API_KEY__ : '') || process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not defined. Please check configuration (Settings > Secrets).");
+    }
+    return new GoogleGenAI({ apiKey });
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -107,14 +115,21 @@ export default function App() {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = docState.htmlContent;
       
-      // 1. Remove all error highlighting spans but keep text
+      // 1. Remove all error highlighting spans added by EditorView (in case they were somehow in the string)
       const errorSpans = tempDiv.querySelectorAll('span[data-error-id]');
       errorSpans.forEach(span => {
         const textNode = document.createTextNode(span.textContent || "");
         span.parentNode?.replaceChild(textNode, span);
       });
 
-      // 2. Remove any anchor tags used for linking
+      // 2. Remove all "fixed" highlight spans but keep the corrected text
+      const fixedSpans = tempDiv.querySelectorAll('span.text-green-600');
+      fixedSpans.forEach(span => {
+        const textNode = document.createTextNode(span.textContent || "");
+        span.parentNode?.replaceChild(textNode, span);
+      });
+
+      // 3. Remove any other utility spans
       const anchors = tempDiv.querySelectorAll('span[id^="error-"]');
       anchors.forEach(a => {
         const textNode = document.createTextNode(a.textContent || "");
@@ -128,9 +143,6 @@ export default function App() {
             <meta charset="utf-8" />
             <title>${docState.fileName}</title>
             <style>
-              @page {
-                margin: 2.5cm 2cm 2.5cm 3cm;
-              }
               body { 
                 font-family: 'Times New Roman', Times, serif; 
                 font-size: 14pt; 
@@ -139,9 +151,15 @@ export default function App() {
               }
               p { 
                 text-align: justify; 
-                margin: 0; 
-                padding: 0;
-                min-height: 1em;
+                margin-top: 0;
+                margin-bottom: 6pt;
+                text-indent: 1.27cm;
+              }
+              h1, h2, h3 {
+                text-align: center;
+                font-weight: bold;
+                margin-top: 12pt;
+                margin-bottom: 6pt;
               }
               table { 
                 border-collapse: collapse; 
@@ -153,8 +171,6 @@ export default function App() {
                 padding: 5pt; 
                 vertical-align: top;
               }
-              strong, b { font-weight: bold; }
-              em, i { font-style: italic; }
             </style>
           </head>
           <body>
@@ -175,7 +191,11 @@ export default function App() {
         orientation: 'portrait'
       });
 
-      saveAs(docxBlob, `VB_Chuan_${docState.fileName.replace('.docx', '')}.docx`);
+      const fileName = docState.fileName.toLowerCase().endsWith('.docx') 
+        ? docState.fileName 
+        : `${docState.fileName}.docx`;
+      
+      saveAs(docxBlob, `VB_Chuan_${fileName}`);
     } catch (err) {
       console.error("Download failed:", err);
       alert("Lỗi khi chuẩn bị tệp tải về. Vui lòng thử lại.");
@@ -190,8 +210,8 @@ export default function App() {
       if (text) {
         setDocState({
           rawText: text,
-          htmlContent: `<div style="font-family: 'Times New Roman', serif; font-size: 14pt; line-height: 1.5; white-space: pre-wrap;">${text}</div>`,
-          fileName: 'Văn bản dán.txt'
+          htmlContent: `<p>${text.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`,
+          fileName: 'Van_ban_dan.docx'
         });
         setErrors([]);
       }
@@ -212,17 +232,19 @@ export default function App() {
 
       const textToAnalyze = contentToCheck || docState.rawText;
       
-      // Optimization: Send structured context
+      const ai = getAI();
+      
+      // Optimization: Send structured context. Increased limit to 50k chars.
       const prompt = `
         CHẾ ĐỘ KIỂM TRA: ${modeText}
         LOẠI HÌNH: ${contentToCheck ? 'SOÁT VÙNG LỰA CHỌN' : 'SOÁT TOÀN DIỆN'}
         DỮ LIỆU ĐẦU VÀO:
         --- START ---
-        ${textToAnalyze.substring(0, 10000)}
+        ${textToAnalyze.substring(0, 50000)}
         --- END ---
         
         YÊU CẦU CHI TIẾT:
-        1. Áp dụng các kiến thức mới nhất về Luật Tổ chức chính quyền địa phương (Cập nhật 2025) và quy định hành chính hiện hành.
+        1. Áp dụng các kiến thức mới nhất về Luật Tổ chức chính quyền địa phương (Cập nhật 2026) và quy định hành chính hiện hành.
         2. KIỂM TRA TÍNH THỐNG NHẤT: Rà soát toàn bộ văn bản để tìm các mẫu (patterns) trình bày đề mục, danh sách không đồng nhất. Ví dụ: Nếu mục 1 là "1.", mục 2 không được là "2/".
         3. HIỆU CHỈNH TỐI ƯU: Đề xuất phương án sửa lỗi tối ưu nhất dựa trên các cơ sở pháp lý hiện hành.
       `;
@@ -254,18 +276,18 @@ export default function App() {
       });
 
       const textResult = response.text || "[]";
-      const result = JSON.parse(textResult.trim());
+      const analysisResult = JSON.parse(textResult.trim());
       
       // If it's a selection check, we might want to append errors or replace
       if (contentToCheck) {
-        setErrors(prev => [...result, ...prev]);
+        setErrors(prev => [...analysisResult, ...prev]);
       } else {
-        setErrors(result);
+        setErrors(analysisResult);
       }
     } catch (err) {
       console.error("Analysis failed:", err);
       setErrors([]);
-      alert("Không thể phân tích văn bản. Vui lòng thử lại.");
+      alert("Không thể phân tích văn bản. Vui lòng thử lại hoặc kiểm tra API Key.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -276,6 +298,9 @@ export default function App() {
     const error = errors.find(e => e.id === errorId);
     if (!error) return;
 
+    // Use a more targeted replacement: replace ONLY the first occurrence or all occurrences of the exact string
+    // Here we use split/join which replaces ALL occurrences. In a professional editor, you'd want offset-based indexing.
+    // However, given the current simple string state, we'll stick to this but ensure we don't break existing tags if possible.
     const newHtml = docState.htmlContent.split(error.originalText).join(`<span class="text-green-600 font-bold bg-green-50 px-1 rounded">${error.suggestion}</span>`);
     setDocState({ ...docState, htmlContent: newHtml });
     setErrors(prev => prev.filter(e => e.id !== errorId));

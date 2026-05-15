@@ -71,7 +71,7 @@ export default function Toolbar({
       <div className="flex items-center gap-3">
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-green-50 rounded-full border border-green-100 mr-4">
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-green-700 uppercase tracking-tighter">AL Knowledge: Updated Law 2025</span>
+          <span className="text-[10px] font-bold text-green-700 uppercase tracking-tighter">AL Knowledge: Updated Law 2026</span>
         </div>
 
         {hasFile && (

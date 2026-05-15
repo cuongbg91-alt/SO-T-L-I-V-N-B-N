@@ -15,6 +15,11 @@ export default function EditorView({ content, errors, selectedErrorId }: EditorV
 
     let highlightedContent = content;
     
+    // Helper to escape regex special characters
+    const escapeRegex = (string: string) => {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
     // Sort errors by text length descending to avoid partial replacement issues
     const sortedErrors = [...errors].sort((a, b) => b.originalText.length - a.originalText.length);
 
@@ -22,27 +27,45 @@ export default function EditorView({ content, errors, selectedErrorId }: EditorV
       const isSelected = err.id === selectedErrorId;
       // Highlighting logic: Red text with underline for all, prominent for selected
       const highlightClass = isSelected 
-        ? "bg-red-600 text-white px-1 rounded shadow-[0_0_15px_rgba(220,38,38,0.5)] ring-4 ring-red-200 scale-110 inline-block transition-all duration-300 font-bold z-10 relative" 
-        : "bg-red-600/20 border-b-2 border-red-600 cursor-pointer hover:bg-red-600/40 transition-all text-red-800 font-medium";
+        ? "bg-red-600 text-white px-1 rounded shadow-[0_0_15px_rgba(220,38,38,0.5)] ring-4 ring-red-200 scale-102 inline-block transition-all duration-300 font-bold z-10 relative mx-0.5" 
+        : "bg-red-600/10 border-b-2 border-red-500/50 cursor-pointer hover:bg-red-600/20 transition-all text-red-900 font-medium decoration-wavy";
       
       const anchorId = `error-${err.id}`;
-      // Basic text replacement - inserting a span with specific ID and class
-      // Note: This matches exact text. If word formatting splits text, this might miss.
-      const replacement = `<span id="${anchorId}" class="${highlightClass}" data-error-id="${err.id}" title="${err.message}">${err.originalText}</span>`;
+      const originalText = err.originalText;
       
-      // Only replace if not already wrapped (basic check)
-      if (!highlightedContent.includes(`data-error-id="${err.id}"`)) {
-        // Try exact match first
-        if (highlightedContent.includes(err.originalText)) {
-          highlightedContent = highlightedContent.split(err.originalText).join(replacement);
-        } else {
-          // Try trimmed match just in case
-          const trimmed = err.originalText.trim();
-          if (trimmed && highlightedContent.includes(trimmed)) {
-            const trimmedReplacement = `<span id="${anchorId}" class="${highlightClass}" data-error-id="${err.id}" title="${err.message}">${trimmed}</span>`;
-            highlightedContent = highlightedContent.split(trimmed).join(trimmedReplacement);
-          }
-        }
+      // Basic check if already highlighted
+      if (highlightedContent.includes(`data-error-id="${err.id}"`)) return;
+
+      // Handle common HTML entities that mammoth/browser might introduce
+      const escapedOriginalText = originalText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const replacement = `<span id="${anchorId}" class="${highlightClass}" data-error-id="${err.id}" title="${err.message.replace(/"/g, '&quot;')}">${originalText}</span>`;
+      
+      // Try exact match in the HTML first
+      if (highlightedContent.includes(originalText)) {
+        // Use regex for global replacement to handle all occurrences if they aren't part of a tag
+        // We use a simple strategy: only replace if it's not inside a tag
+        const regex = new RegExp(escapeRegex(originalText), 'g');
+        highlightedContent = highlightedContent.replace(regex, (match, offset) => {
+           // Basic check: is this inside a tag?
+           const before = highlightedContent.substring(0, offset);
+           const openTags = before.split('<').length - 1;
+           const closeTags = before.split('>').length - 1;
+           if (openTags > closeTags) return match; // Inside a tag
+           return replacement;
+        });
+      } else if (highlightedContent.includes(escapedOriginalText)) {
+        const regex = new RegExp(escapeRegex(escapedOriginalText), 'g');
+        highlightedContent = highlightedContent.replace(regex, (match, offset) => {
+           const before = highlightedContent.substring(0, offset);
+           const openTags = before.split('<').length - 1;
+           const closeTags = before.split('>').length - 1;
+           if (openTags > closeTags) return match;
+           return `<span id="${anchorId}" class="${highlightClass}" data-error-id="${err.id}" title="${err.message.replace(/"/g, '&quot;')}">${match}</span>`;
+        });
       }
     });
 
